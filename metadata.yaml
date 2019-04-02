@@ -1,3 +1,8 @@
 requires:
   docker-registry:
     interface: docker-registry
+
+provides:
+  container-runtime:
+    interface: container-runtime
+    scope: container
