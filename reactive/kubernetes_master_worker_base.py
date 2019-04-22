@@ -152,13 +152,19 @@ def process_snapd_timer():
     (present and future) will refresh near the same time. '''
     # Get the current snapd refresh timer; we know layer-snap has set this
     # when the 'snap.refresh.set' flag is present.
-    timer = snap.get(snapname='core', key='refresh.timer').decode('utf-8')
+    timer = snap.get(
+        snapname='core', key='refresh.timer').decode('utf-8').strip()
     if not timer:
-        # A subordinate wiped out our value, so we need to force it to be set
-        # again. Luckily, the subordinate should only wipe it out once, on
-        # first install, so this should remain stable afterward.
-        snap.set_refresh_timer(hookenv.config('snapd_refresh'))
-        timer = snap.get(snapname='core', key='refresh.timer').decode('utf-8')
+        # The core snap timer is empty. This likely means a subordinate timer
+        # reset ours. Try to set it back to a previously leader-set value,
+        # falling back to config if needed. Luckily, this should only happen
+        # during subordinate install, so this should remain stable afterward.
+        timer = leader_get('snapd_refresh') or hookenv.config('snapd_refresh')
+        snap.set_refresh_timer(timer)
+
+        # Ensure we have the timer known by snapd (it may differ from config).
+        timer = snap.get(
+            snapname='core', key='refresh.timer').decode('utf-8').strip()
 
     # The first time through, data_changed will be true. Subsequent calls
     # should only update leader data if something changed.
