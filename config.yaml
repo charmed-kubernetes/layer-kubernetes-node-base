@@ -1,0 +1,22 @@
+options:
+  sysctl:
+    type: string
+    default: "{ net.ipv4.neigh.default.gc_thresh1 : 128, net.ipv4.neigh.default.gc_thresh2 : 28672, net.ipv4.neigh.default.gc_thresh3 : 32768, net.ipv6.neigh.default.gc_thresh1 : 128, net.ipv6.neigh.default.gc_thresh2 : 28672, net.ipv6.neigh.default.gc_thresh3 : 32768 }"
+    description: |
+      YAML formatted associative array of sysctl values, e.g.:
+      '{kernel.pid_max : 4194303 }'. Note that kube-proxy handles
+      the conntrack settings. The proper way to alter them is to
+      use the proxy-extra-args config to set them, e.g.:
+        juju config kubernetes-master proxy-extra-args="conntrack-min=1000000 conntrack-max-per-core=250000"
+        juju config kubernetes-worker proxy-extra-args="conntrack-min=1000000 conntrack-max-per-core=250000"
+      They can also be set to 0 to ignore kube-proxy's settings
+      and use the sysctl settings instead.
+  proxy-extra-args:
+    type: string
+    default: ""
+    description: |
+      Space separated list of flags and key=value pairs that will be passed as arguments to
+      kube-proxy. For example a value like this:
+        runtime-config=batch/v2alpha1=true profiling=true
+      will result in kube-apiserver being run with the following options:
+        --runtime-config=batch/v2alpha1=true --profiling=true
