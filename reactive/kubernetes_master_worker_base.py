@@ -2,14 +2,15 @@ import os
 import shutil
 import subprocess
 from subprocess import check_call, check_output, CalledProcessError
-from charms import leadership
+from charms.leadership import leader_get, leader_set
 from charms.reactive import endpoint_from_flag, set_state, remove_state, \
     when, when_not, when_any, data_changed
 from charms.docker import DockerOpts
 from charms.layer.kubernetes_common import client_crt_path, client_key_path
 from charms.layer import snap
 from charmhelpers.core import hookenv, unitdata
-from charmhelpers.core.host import install_ca_cert
+from charmhelpers.core.host import install_ca_cert, is_container
+from charmhelpers.core.sysctl import create as create_sysctl
 
 
 db = unitdata.kv()
@@ -170,7 +171,7 @@ def process_snapd_timer():
     # should only update leader data if something changed.
     if data_changed('snapd_refresh', timer):
         hookenv.log('setting leader snapd_refresh timer to: {}'.format(timer))
-        leadership.leader_set({'snapd_refresh': timer})
+        leader_set({'snapd_refresh': timer})
 
 
 @when_any('kubernetes-master.snaps.installed',
@@ -184,6 +185,22 @@ def set_snapd_timer():
     # Layer-snap will always set a core refresh.timer, which may not be the
     # same as our leader. Gating with 'snap.refresh.set' ensures layer-snap
     # has finished and we are free to set our config to the leader's timer.
-    timer = leadership.leader_get('snapd_refresh') or ''  # None will error
+    timer = leader_get('snapd_refresh') or ''  # None will error
     hookenv.log('setting snapd_refresh timer to: {}'.format(timer))
     snap.set_refresh_timer(timer)
+
+
+@when('config.changed.sysctl')
+def write_sysctl():
+    sysctl_settings = hookenv.config('sysctl')
+    if sysctl_settings and not is_container():
+        create_sysctl(
+            sysctl_settings,
+            '/etc/sysctl.d/50-kubernetes-charm.conf',
+            # Some keys in the config may not exist in /proc/sys/net/.
+            # For example, the conntrack module may not be loaded when
+            # using lxd drivers insteam of kvm. In these cases, we
+            # simply ignore the missing keys, rather than making time
+            # consuming calls out to the filesystem to check for their
+            # existence.
+            ignore=True)
