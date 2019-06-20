@@ -1,14 +1,35 @@
 import os
 import shutil
 import subprocess
-from subprocess import check_call, check_output, CalledProcessError
+from subprocess import (
+    check_call,
+    check_output,
+    CalledProcessError
+)
+
+from charms.docker import DockerOpts
 from charms.leadership import leader_get, leader_set
-from charms.reactive import endpoint_from_flag, set_state, remove_state, \
-    when, when_not, when_any, data_changed
-from charms.layer.kubernetes_common import client_crt_path, client_key_path
+from charms.reactive import (
+    endpoint_from_flag,
+    set_state,
+    remove_state,
+    when, when_not,
+    when_any,
+    data_changed
+)
 from charms.layer import snap
-from charmhelpers.core import hookenv, unitdata
-from charmhelpers.core.host import install_ca_cert, is_container
+from charms.layer.kubernetes_common import (
+    client_crt_path,
+    client_key_path
+)
+from charmhelpers.core import (
+    hookenv,
+    unitdata
+)
+from charmhelpers.core.host import (
+    install_ca_cert,
+    is_container
+)
 from charmhelpers.core.sysctl import create as create_sysctl
 
 
@@ -101,19 +122,22 @@ def manage_docker_opts(opts, remove=False):
     :param: dict opts: option keys/values; use None value if the key is a flag
     :param: bool remove: True to remove the options; False to add them
     '''
-    docker = endpoint_from_flag('endpoint.docker.ready')
-    docker_opts = docker.get('options')
+    try:
+        docker_opts = DockerOpts()
+    except Exception as e:
+        hookenv.log(e)
+        return
 
-    if docker_opts:
-        for k, v in opts.items():
-            # Always remove existing option
-            if docker_opts.exists(k):
-                docker_opts.pop(k)
-            if not remove:
-                docker_opts.add(k, v)
-        hookenv.log('DockerOpts daemon options changed. Requesting a restart.')
-        # State will be removed by layer-docker after restart
-        set_state('docker.restart')
+    for k, v in opts.items():
+        # Always remove existing option
+        if docker_opts.exists(k):
+            docker_opts.pop(k)
+        if not remove:
+            docker_opts.add(k, v)
+    hookenv.log('DockerOpts daemon options changed. Requesting a restart.')
+    # State will be removed by layer-docker after restart
+    set_state('docker.restart')
+
 
 def manage_registry_certs(subdir, remove=False):
     '''Add or remove TLS data for a specific registry.
