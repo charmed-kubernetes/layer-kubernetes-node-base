@@ -2,4 +2,3 @@ repo: https://github.com/kubernetes/kubernetes.git
 includes:
 - 'layer:kubernetes-common'
 - 'interface:container-runtime'
-- 'interface:docker-registry'
