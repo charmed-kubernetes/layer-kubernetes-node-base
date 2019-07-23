@@ -1,7 +1,7 @@
 options:
   sysctl:
     type: string
-    default: "{ net.ipv4.conf.all.forwarding : 1, net.ipv4.neigh.default.gc_thresh1 : 128, net.ipv4.neigh.default.gc_thresh2 : 28672, net.ipv4.neigh.default.gc_thresh3 : 32768, net.ipv6.neigh.default.gc_thresh1 : 128, net.ipv6.neigh.default.gc_thresh2 : 28672, net.ipv6.neigh.default.gc_thresh3 : 32768 }"
+    default: "{ net.ipv4.conf.all.forwarding : 1, net.ipv4.neigh.default.gc_thresh1 : 128, net.ipv4.neigh.default.gc_thresh2 : 28672, net.ipv4.neigh.default.gc_thresh3 : 32768, net.ipv6.neigh.default.gc_thresh1 : 128, net.ipv6.neigh.default.gc_thresh2 : 28672, net.ipv6.neigh.default.gc_thresh3 : 32768, fs.inotify.max_user_instances : 8192, fs.inotify.max_user_watches: 1048576 }"
     description: |
       YAML formatted associative array of sysctl values, e.g.:
       '{kernel.pid_max : 4194303 }'. Note that kube-proxy handles
@@ -9,8 +9,9 @@ options:
       use the proxy-extra-args config to set them, e.g.:
         juju config kubernetes-master proxy-extra-args="conntrack-min=1000000 conntrack-max-per-core=250000"
         juju config kubernetes-worker proxy-extra-args="conntrack-min=1000000 conntrack-max-per-core=250000"
-      They can also be set to 0 to ignore kube-proxy's settings
-      and use the sysctl settings instead.
+      The proxy-extra-args conntrack-min and conntrack-max-per-core can be set to 0 to ignore
+      kube-proxy's settings and use the sysctl settings instead. Note the fundamental difference between
+      the setting of conntrack-max-per-core vs nf_conntrack_max.
   proxy-extra-args:
     type: string
     default: ""
