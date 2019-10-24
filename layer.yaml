@@ -1,4 +1,5 @@
 repo: https://github.com/kubernetes/kubernetes.git
 includes:
+- 'layer:cis-benchmark'
 - 'layer:kubernetes-common'
 - 'interface:container-runtime'
