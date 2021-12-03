@@ -2,3 +2,16 @@ provides:
   container-runtime:
     interface: container-runtime
     scope: container
+resources:
+  cni-amd64:
+    type: file
+    filename: cni.tgz
+    description: CNI plugins for amd64
+  cni-arm64:
+    type: file
+    filename: cni.tgz
+    description: CNI plugins for arm64
+  cni-s390x:
+    type: file
+    filename: cni.tgz
+    description: CNI plugins for s390x

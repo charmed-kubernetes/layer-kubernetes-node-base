@@ -4,6 +4,9 @@ from charms.leadership import (
     leader_set
 )
 from charms.reactive import (
+    clear_flag,
+    hook,
+    set_flag,
     when,
     when_not,
     when_any,
@@ -13,6 +16,47 @@ from charms.reactive import (
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import is_container
 from charmhelpers.core.sysctl import create as create_sysctl
+from charms.layer.kubernetes_common import arch
+import os
+from subprocess import check_call
+
+
+@hook('upgrade-charm')
+def upgrade_charm():
+    clear_flag('kubernetes.cni-plugins.installed')
+
+
+@when_not('kubernetes.cni-plugins.installed')
+def install_cni_plugins():
+    ''' Unpack the cni-plugins resource '''
+    hookenv.status_set('maintenance', 'Installing CNI plugins')
+
+    # Get the resource via resource_get
+    try:
+        resource_name = 'cni-{}'.format(arch())
+        archive = hookenv.resource_get(resource_name)
+    except Exception:
+        message = 'Error fetching the cni resource.'
+        hookenv.log(message)
+        return
+
+    if not archive:
+        hookenv.log('Missing cni resource.')
+        return
+
+    # Handle null resource publication, we check if filesize < 1mb
+    filesize = os.stat(archive).st_size
+    if filesize < 1000000:
+        hookenv.log('Incomplete cni resource.')
+        return
+
+    unpack_path = '/opt/cni/bin'
+    os.makedirs(unpack_path, exist_ok=True)
+    cmd = ['tar', 'xfvz', archive, '-C', unpack_path]
+    hookenv.log(cmd)
+    check_call(cmd)
+
+    set_flag('kubernetes.cni-plugins.installed')
 
 
 @when_any('kubernetes-master.snaps.installed',
