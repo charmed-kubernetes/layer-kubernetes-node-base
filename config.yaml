@@ -21,3 +21,31 @@ options:
         runtime-config=batch/v2alpha1=true profiling=true
       will result in kube-apiserver being run with the following options:
         --runtime-config=batch/v2alpha1=true --profiling=true
+  kubelet-extra-args:
+    type: string
+    default: ""
+    description: |
+      Space separated list of flags and key=value pairs that will be passed as arguments to
+      kubelet. For example a value like this:
+        runtime-config=batch/v2alpha1=true profiling=true
+      will result in kubelet being run with the following options:
+        --runtime-config=batch/v2alpha1=true --profiling=true
+      Note: As of Kubernetes 1.10.x, many of Kubelet's args have been deprecated, and can
+      be set with kubelet-extra-config instead.
+  kubelet-extra-config:
+    default: "{}"
+    type: string
+    description: |
+      Extra configuration to be passed to kubelet. Any values specified in this
+      config will be merged into a KubeletConfiguration file that is passed to
+      the kubelet service via the --config flag. This can be used to override
+      values provided by the charm.
+
+      Requires Kubernetes 1.10+.
+
+      The value for this config must be a YAML mapping that can be safely
+      merged with a KubeletConfiguration file. For example:
+        {evictionHard: {memory.available: 200Mi}}
+
+      For more information about KubeletConfiguration, see upstream docs:
+      https://kubernetes.io/docs/tasks/administer-cluster/kubelet-config-file/
