@@ -1,21 +1,23 @@
+import os
+from subprocess import check_call
+
 from charms.layer import snap
 from charms.leadership import leader_get, leader_set
 from charms.reactive import (
     clear_flag,
+    data_changed,
     hook,
     set_flag,
+    set_state,
     when,
     when_not,
     when_any,
-    data_changed,
 )
 
 from charmhelpers.core import hookenv
 from charmhelpers.core.host import is_container
 from charmhelpers.core.sysctl import create as create_sysctl
 from charms.layer.kubernetes_common import arch
-import os
-from subprocess import check_call
 
 
 @hook("upgrade-charm")
@@ -124,3 +126,8 @@ def write_sysctl():
             # existence.
             ignore=True,
         )
+
+
+@when("config.changed.labels")
+def handle_labels_changed():
+    set_state("node.label-config-required")
