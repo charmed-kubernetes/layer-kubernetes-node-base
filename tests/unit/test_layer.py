@@ -1,7 +1,7 @@
 import pytest
 import unittest.mock as mock
 
-from charms.layer import kubernetes_master_worker_base
+from charms.layer import kubernetes_node_base
 from charmhelpers.core import hookenv
 
 
@@ -22,10 +22,10 @@ class TestNodeLabels:
         monkeypatch.setattr(hookenv, "service_name", hsn)
 
         gnn = mock.Mock(return_value="the-node")
-        monkeypatch.setattr(kubernetes_master_worker_base, "get_node_name", gnn)
+        monkeypatch.setattr(kubernetes_node_base, "get_node_name", gnn)
 
         mock_call = self.call = mock.Mock(return_value=0)
-        monkeypatch.setattr(kubernetes_master_worker_base, "call", mock_call)
+        monkeypatch.setattr(kubernetes_node_base, "call", mock_call)
 
         self.base_node_cmd = [
             "kubectl",
@@ -36,7 +36,7 @@ class TestNodeLabels:
         ]
 
     def test_label_add(self, request):
-        label_maker = kubernetes_master_worker_base.LabelMaker("/path/to/kube/config")
+        label_maker = kubernetes_node_base.LabelMaker("/path/to/kube/config")
         label_maker.apply_node_labels()
 
         call_set = [
@@ -51,7 +51,7 @@ class TestNodeLabels:
 
     def test_invalid_label(self):
         self.config = {"labels": "too=many=equals not_enough_equals"}
-        label_maker = kubernetes_master_worker_base.LabelMaker("/path/to/kube/config")
+        label_maker = kubernetes_node_base.LabelMaker("/path/to/kube/config")
         label_maker.apply_node_labels()
         call_set = [
             mock.call(self.base_node_cmd + expected)
