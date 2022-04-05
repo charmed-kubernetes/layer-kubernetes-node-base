@@ -11,7 +11,6 @@ from charms.reactive import (
     set_state,
     when,
     when_not,
-    when_any,
 )
 
 from charmhelpers.core import hookenv
@@ -58,10 +57,7 @@ def install_cni_plugins():
     set_flag("kubernetes.cni-plugins.installed")
 
 
-KUBERNETES_CP = "kubernetes-master"  # wokeignore:rule=master
-
-
-@when_any(KUBERNETES_CP + ".snaps.installed", "kubernetes-worker.snaps.installed")
+@when("kubernetes-node.snaps.installed")
 @when("snap.refresh.set")
 @when("leadership.is_leader")
 def process_snapd_timer():
@@ -92,7 +88,7 @@ def process_snapd_timer():
         leader_set({"snapd_refresh": timer})
 
 
-@when_any(KUBERNETES_CP + ".snaps.installed", "kubernetes-worker.snaps.installed")
+@when("kubernetes-node.snaps.installed")
 @when("snap.refresh.set")
 @when("leadership.changed.snapd_refresh")
 @when_not("leadership.is_leader")
