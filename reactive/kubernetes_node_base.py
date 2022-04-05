@@ -11,7 +11,6 @@ from charms.reactive import (
     set_state,
     when,
     when_not,
-    when_any,
 )
 
 from charmhelpers.core import hookenv
