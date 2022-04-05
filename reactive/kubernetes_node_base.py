@@ -89,7 +89,7 @@ def process_snapd_timer():
         leader_set({"snapd_refresh": timer})
 
 
-@when_any("kubernetes-node.snaps.installed")
+@when("kubernetes-node.snaps.installed")
 @when("snap.refresh.set")
 @when("leadership.changed.snapd_refresh")
 @when_not("leadership.is_leader")
