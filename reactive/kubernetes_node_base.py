@@ -58,7 +58,7 @@ def install_cni_plugins():
     set_flag("kubernetes.cni-plugins.installed")
 
 
-@when_any("kubernetes-node.snaps.installed")
+@when("kubernetes-node.snaps.installed")
 @when("snap.refresh.set")
 @when("leadership.is_leader")
 def process_snapd_timer():
