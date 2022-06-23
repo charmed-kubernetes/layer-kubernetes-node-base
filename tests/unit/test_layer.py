@@ -18,8 +18,11 @@ class TestNodeLabels:
         self.hook_log = mock.Mock()
         monkeypatch.setattr(hookenv, "log", self.hook_log)
 
-        hsn = mock.Mock(return_value="kubernetes-control-plane")
-        monkeypatch.setattr(hookenv, "service_name", hsn)
+        han = mock.Mock(return_value="kubernetes-control-plane2")
+        monkeypatch.setattr(hookenv, "service_name", han)
+
+        hcn = mock.Mock(return_value="kubernetes-control-plane")
+        monkeypatch.setattr(hookenv, "charm_name", hcn)
 
         gnn = mock.Mock(return_value="the-node")
         monkeypatch.setattr(kubernetes_node_base, "get_node_name", gnn)
@@ -43,7 +46,8 @@ class TestNodeLabels:
             mock.call(self.base_node_cmd + expected)
             for expected in [
                 [f'{request.node.name}="value"', "--overwrite"],
-                ["juju-application=kubernetes-control-plane", "--overwrite"],
+                ["juju-application=kubernetes-control-plane2", "--overwrite"],
+                ["juju-charm=kubernetes-control-plane", "--overwrite"],
                 ["juju.io/cloud-"],
             ]
         ]
@@ -56,7 +60,8 @@ class TestNodeLabels:
         call_set = [
             mock.call(self.base_node_cmd + expected)
             for expected in [
-                ["juju-application=kubernetes-control-plane", "--overwrite"],
+                ["juju-application=kubernetes-control-plane2", "--overwrite"],
+                ["juju-charm=kubernetes-control-plane", "--overwrite"],
                 ["juju.io/cloud-"],
             ]
         ]
