@@ -97,8 +97,9 @@ class LabelMaker:
                 current_labels[key] = val
                 db.set("current_labels", current_labels)
 
-            # Set the juju-application label.
+            # Set the juju-application and juju-charm labels.
             self.set_label("juju-application", hookenv.service_name())
+            self.set_label("juju-charm", hookenv.charm_name())
 
             # Set the juju.io/cloud label.
             juju_io_cloud_labels = [
