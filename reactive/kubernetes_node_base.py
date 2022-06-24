@@ -23,6 +23,13 @@ from charms.layer.kubernetes_common import arch
 def upgrade_charm():
     clear_flag("kubernetes.cni-plugins.installed")
 
+    # rename default CNI config to 01-default.*
+    cni_conf_dir = "/etc/cni/net.d"
+    for filename in os.listdir(cni_conf_dir):
+        if filename.startswith("05-default."):
+            new_filename = "01" + filename[2:]
+            os.replace(filename, new_filename)
+
 
 @when_not("kubernetes.cni-plugins.installed")
 def install_cni_plugins():
