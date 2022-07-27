@@ -24,11 +24,14 @@ def upgrade_charm():
     clear_flag("kubernetes.cni-plugins.installed")
 
     # rename default CNI config to 01-default.*
-    cni_conf_dir = "/etc/cni/net.d"
+    cni_conf_dir = "/etc/cni/net.d/"
     for filename in os.listdir(cni_conf_dir):
         if filename.startswith("05-default."):
             new_filename = "01" + filename[2:]
-            os.replace(filename, new_filename)
+            os.replace(
+                os.join.path(cni_conf_dir, filename),
+                os.join.path(cni_conf_dir, new_filename),
+            )
 
 
 @when_not("kubernetes.cni-plugins.installed")
