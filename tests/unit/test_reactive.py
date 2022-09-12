@@ -2,8 +2,9 @@ import unittest.mock as mock
 from reactive import kubernetes_node_base
 
 
-@mock.patch("reactive.kubernetes_node_base.os.listdir")
-@mock.patch("reactive.kubernetes_node_base.os.replace")
+@mock.patch("os.listdir")
+@mock.patch("os.replace")
+@mock.patch("os.path.exists", mock.Mock(return_value=True))
 def test_upgrade_charm_renames_config(mock_os_replace, mock_os_list_dir):
     mock_os_list_dir.return_value = [
         "99-something.conf",

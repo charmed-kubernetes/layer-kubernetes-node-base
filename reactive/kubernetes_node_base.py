@@ -25,6 +25,8 @@ def upgrade_charm():
 
     # rename default CNI config to 01-default.*
     cni_conf_dir = "/etc/cni/net.d/"
+    if not os.path.exists(cni_conf_dir):
+        return
     for filename in os.listdir(cni_conf_dir):
         if filename.startswith("05-default."):
             new_filename = "01" + filename[2:]
