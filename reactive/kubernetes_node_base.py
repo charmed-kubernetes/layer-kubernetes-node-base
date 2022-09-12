@@ -29,8 +29,8 @@ def upgrade_charm():
         if filename.startswith("05-default."):
             new_filename = "01" + filename[2:]
             os.replace(
-                os.join.path(cni_conf_dir, filename),
-                os.join.path(cni_conf_dir, new_filename),
+                os.path.join(cni_conf_dir, filename),
+                os.path.join(cni_conf_dir, new_filename),
             )
 
 
