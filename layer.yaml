@@ -1,4 +1,9 @@
 repo: https://github.com/kubernetes/kubernetes.git
+options:
+  basic:
+    packages:
+      - ipset      # for kube-proxy when mode=ipvs
+      - conntrack  # for kube-proxy when mode-ipvs
 includes:
 - 'layer:cis-benchmark'
 - 'layer:coordinator'

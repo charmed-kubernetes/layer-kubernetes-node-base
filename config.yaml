@@ -41,14 +41,27 @@ options:
       the kubelet service via the --config flag. This can be used to override
       values provided by the charm.
 
-      Requires Kubernetes 1.10+.
-
       The value for this config must be a YAML mapping that can be safely
       merged with a KubeletConfiguration file. For example:
         {evictionHard: {memory.available: 200Mi}}
 
       For more information about KubeletConfiguration, see upstream docs:
       https://kubernetes.io/docs/tasks/administer-cluster/kubelet-config-file/
+  proxy-extra-config:
+    default: "{}"
+    type: string
+    description: |
+      Extra configuration to be passed to kube-proxy. Any values specified in
+      this config will be merged into a KubeProxyConfiguration file that is
+      passed to the kube-proxy service via the --config flag. This can be used
+      to override values provided by the charm.
+
+      The value for this config must be a YAML mapping that can be safely
+      merged with a KubeProxyConfiguration file. For example:
+        {mode: ipvs, ipvs: {strictARP: true}}
+
+      For more information about KubeProxyConfiguration, see upstream docs:
+      https://kubernetes.io/docs/reference/config-api/kube-proxy-config.v1alpha1/
   labels:
     type: string
     default: ""
