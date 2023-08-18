@@ -62,7 +62,7 @@ def install_cni_plugins():
 
     unpack_path = "/opt/cni/bin"
     os.makedirs(unpack_path, exist_ok=True)
-    cmd = ["tar", "xfvz", archive, "-C", unpack_path]
+    cmd = ["tar", "xfvz", archive, "-C", unpack_path, "--no-same-owner"]
     hookenv.log(cmd)
     check_call(cmd)
 
