@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from ops.framework import Framework
 import pytest
 import unittest.mock as mock
 
@@ -85,7 +84,6 @@ def test_active_labels_apply_layer_failure(subprocess_run, harness):
         lm.apply_node_labels()
 
 
-
 def test_active_labels_apply_layers_with_cloud(subprocess_run, harness):
     subprocess_run.return_value = RunResponse(0)
     lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
@@ -117,7 +115,7 @@ def test_active_labels_apply_layers_from_config(subprocess_run, harness, caplog)
     harness.update_config({"labels": "node-role.kubernetes.io/control-plane= invalid"})
     subprocess_run.return_value = RunResponse(0)
     lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
-    lm._stored.current_labels={"node-role.kubernetes.io/worker": ""}
+    lm._stored.current_labels = {"node-role.kubernetes.io/worker": ""}
     lm.apply_node_labels()
     assert "Skipping malformed option: invalid." in caplog.messages
     assert lm._stored.current_labels == {"node-role.kubernetes.io/control-plane": ""}
