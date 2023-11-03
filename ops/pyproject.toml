@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "charm-lib-node-base"
+version = "0.0.0"
+authors = [
+  {name="Adam Dyess", email="adam.dyess@canonical.com"},
+]
+description = "Charm library for node-base"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+  "ops",
+]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base"
+"Bug Tracker" = "https://github.com/charmed-kubernetes/layer-kubernetes-node-base/issues"
