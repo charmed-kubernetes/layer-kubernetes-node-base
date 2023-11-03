@@ -59,7 +59,7 @@ class LabelMaker(Object):
         Returns all existing labels if the api server can fetch from the node,
         otherwise returns None indicating the node cannot be relabeled.
         """
-        cmd = "kubectl --kubeconfig={0} get node {1} -o=jsonpath='{.metadata.labels}"
+        cmd = "kubectl --kubeconfig={0} get node {1} -o=jsonpath='{{.metadata.labels}}"
         cmd = cmd.format(self.kubeconfig_path, self.charm.get_node_name())
         retry_msg = "Failed to get labels. Will retry."
         try:
