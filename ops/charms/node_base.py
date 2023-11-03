@@ -10,14 +10,15 @@ from typing import Union, List, Mapping, Optional, Protocol, Tuple
 from ops import Model, Object, CharmMeta, StoredState
 
 log = logging.getLogger(__name__)
+RUN_RETRIES = 180
 
 
 class Charm(Protocol):
     def get_node_name(self) -> str:
-        ...
+        ...  # pragma: no cover
 
     def get_cloud_name(self) -> str:
-        ...
+        ...  # pragma: no cover
 
     model: Model
 
@@ -42,8 +43,9 @@ class LabelMaker(Object):
 
     @staticmethod
     def _retried_call(
-        cmd: List[str], retry_msg: str, timeout: int = 180
+        cmd: List[str], retry_msg: str, timeout: int = None
     ) -> Tuple[str, str]:
+        timeout = RUN_RETRIES if timeout is None else timeout
         deadline = time.time() + timeout
         while time.time() < deadline:
             rc = run(cmd, capture_output=True)
