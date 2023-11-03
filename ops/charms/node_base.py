@@ -46,7 +46,7 @@ class LabelMaker(Object):
     ) -> Tuple[str, str]:
         deadline = time.time() + timeout
         while time.time() < deadline:
-            rc = run(cmd)
+            rc = run(cmd, capture_output=True)
             if rc.returncode == 0:
                 return rc.stdout, rc.stderr
             log.info(retry_msg)
@@ -59,11 +59,11 @@ class LabelMaker(Object):
         Returns all existing labels if the api server can fetch from the node,
         otherwise returns None indicating the node cannot be relabeled.
         """
-        cmd = "kubectl --kubeconfig={0} get node {1} -o=jsonpath='{{.metadata.labels}}"
+        cmd = "kubectl --kubeconfig={0} get node {1} -o=jsonpath='{{.metadata.labels}}'"
         cmd = cmd.format(self.kubeconfig_path, self.charm.get_node_name())
         retry_msg = "Failed to get labels. Will retry."
         try:
-            label_json = LabelMaker._retried_call(cmd.split(), retry_msg)
+            label_json, _ = LabelMaker._retried_call(cmd.split(), retry_msg)
         except LabelMaker.NodeLabelError:
             return None
         try:
