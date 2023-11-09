@@ -44,14 +44,14 @@ class LabelMaker(Object):
     @staticmethod
     def _retried_call(
         cmd: List[str], retry_msg: str, timeout: int = None
-    ) -> Tuple[str, str]:
+    ) -> Tuple[bytes, bytes]:
         timeout = RUN_RETRIES if timeout is None else timeout
         deadline = time.time() + timeout
         while time.time() < deadline:
             rc = run(cmd, capture_output=True)
             if rc.returncode == 0:
                 return rc.stdout, rc.stderr
-            log.info(retry_msg)
+            log.error(f"{retry_msg}: {rc.stderr}")
             time.sleep(1)
         else:
             raise LabelMaker.NodeLabelError(retry_msg)
@@ -61,7 +61,7 @@ class LabelMaker(Object):
         Returns all existing labels if the api server can fetch from the node,
         otherwise returns None indicating the node cannot be relabeled.
         """
-        cmd = "kubectl --kubeconfig={0} get node {1} -o=jsonpath='{{.metadata.labels}}'"
+        cmd = "kubectl --kubeconfig={0} get node {1} -o=jsonpath={{.metadata.labels}}"
         cmd = cmd.format(self.kubeconfig_path, self.charm.get_node_name())
         retry_msg = "Failed to get labels. Will retry."
         try:
@@ -71,6 +71,7 @@ class LabelMaker(Object):
         try:
             return json.loads(label_json)
         except json.JSONDecodeError:
+            log.error(f"Failed to decode labels: {label_json.decode()}")
             return None
 
     def set_label(self, label: str, value: str) -> None:
