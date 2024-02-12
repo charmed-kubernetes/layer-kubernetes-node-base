@@ -15,11 +15,9 @@ RUN_RETRIES = 180
 
 
 class Charm(Protocol):
-    def get_node_name(self) -> str:
-        ...  # pragma: no cover
+    def get_node_name(self) -> str: ...  # pragma: no cover
 
-    def get_cloud_name(self) -> str:
-        ...  # pragma: no cover
+    def get_cloud_name(self) -> str: ...  # pragma: no cover
 
     model: Model
 
