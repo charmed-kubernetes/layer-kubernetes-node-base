@@ -24,6 +24,11 @@ class Charm(Protocol):
     meta: CharmMeta
 
 
+def _is_kubectl(p: PathLike) -> bool:
+    """Returns True when the provided path exists."""
+    return Path(p).exists()
+
+
 class LabelMaker(Object):
     """Use to apply labels to a kubernetes node."""
 
@@ -62,7 +67,7 @@ class LabelMaker(Object):
             raise LabelMaker.NodeLabelError(retry_msg)
 
     def _kubectl(self, command: str) -> str:
-        if not Path(self.kubectl_path).exists():
+        if not _is_kubectl(self.kubectl_path):
             retry_msg = "Failed to find kubectl. Will retry."
             stdout, _ = self._retried_call(["which", "kubectl"], retry_msg)
             self.kubectl_path = stdout.decode().strip()

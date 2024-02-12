@@ -51,13 +51,27 @@ def harness():
         harness.cleanup()
 
 
+@pytest.fixture(autouse=True)
+def is_kubectl():
+    with mock.patch.object(node_base, "_is_kubectl", return_value=True) as the_mock:
+        yield the_mock
+
+
 def test_active_labels_no_api(subprocess_run, harness):
     lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
     subprocess_run.return_value = RunResponse()
     assert lm.active_labels() is None
 
 
-def test_active_labels_invalid_kubectl(subprocess_run, harness):
+def test_active_labels_invalid_kubectl(subprocess_run, harness, is_kubectl):
+    is_kubectl.return_value = False
+    lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
+    subprocess_run.return_value = RunResponse(1, b"", b"")
+    with pytest.raises(node_base.LabelMaker.NodeLabelError):
+        assert lm.active_labels() is None
+
+
+def test_active_labels_invalid_kubectl_response(subprocess_run, harness):
     lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
     subprocess_run.return_value = RunResponse(0, b"--")
     assert lm.active_labels() is None
