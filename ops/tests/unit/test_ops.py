@@ -93,7 +93,7 @@ def test_active_labels_apply_layers_with_cloud(subprocess_run, harness):
         [
             mock.call(
                 [
-                    "kubectl",
+                    "/snap/bin/kubectl",
                     f"--kubeconfig={KUBE_CONFIG}",
                     "label",
                     "node",
@@ -123,7 +123,7 @@ def test_active_labels_apply_layers_from_config(subprocess_run, harness, caplog)
         [
             mock.call(
                 [
-                    "kubectl",
+                    "/snap/bin/kubectl",
                     f"--kubeconfig={KUBE_CONFIG}",
                     "label",
                     "node",
