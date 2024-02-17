@@ -2,9 +2,10 @@
 
 import json
 import logging
-from subprocess import run
-from os import PathLike
 import time
+from os import PathLike
+from pathlib import Path
+from subprocess import run
 from typing import Union, List, Mapping, Optional, Protocol, Tuple
 
 from ops import Model, Object, CharmMeta, StoredState
@@ -14,15 +15,18 @@ RUN_RETRIES = 180
 
 
 class Charm(Protocol):
-    def get_node_name(self) -> str:
-        ...  # pragma: no cover
+    def get_node_name(self) -> str: ...  # pragma: no cover
 
-    def get_cloud_name(self) -> str:
-        ...  # pragma: no cover
+    def get_cloud_name(self) -> str: ...  # pragma: no cover
 
     model: Model
 
     meta: CharmMeta
+
+
+def _is_kubectl(p: PathLike) -> bool:
+    """Returns True when the provided path exists."""
+    return Path(p).exists()
 
 
 class LabelMaker(Object):
@@ -35,10 +39,16 @@ class LabelMaker(Object):
 
         pass
 
-    def __init__(self, charm: Charm, kubeconfig_path: Union[PathLike, str]):
+    def __init__(
+        self,
+        charm: Charm,
+        kubeconfig_path: Union[PathLike, str],
+        kubectl: Optional[PathLike] = "/snap/bin/kubectl",
+    ):
         super().__init__(parent=charm, key="NodeBase")
-        self.kubeconfig_path = kubeconfig_path
         self.charm = charm
+        self.kubeconfig_path = kubeconfig_path
+        self.kubectl_path = kubectl
         self._stored.set_default(current_labels=dict())
 
     @staticmethod
@@ -56,13 +66,22 @@ class LabelMaker(Object):
         else:
             raise LabelMaker.NodeLabelError(retry_msg)
 
+    def _kubectl(self, command: str) -> str:
+        if not _is_kubectl(self.kubectl_path):
+            retry_msg = "Failed to find kubectl. Will retry."
+            stdout, _ = self._retried_call(["which", "kubectl"], retry_msg)
+            self.kubectl_path = stdout.decode().strip()
+
+        base = "{0} --kubeconfig={1}".format(self.kubectl_path, self.kubeconfig_path)
+        return base + " " + command
+
     def active_labels(self) -> Optional[Mapping[str, str]]:
         """
         Returns all existing labels if the api server can fetch from the node,
         otherwise returns None indicating the node cannot be relabeled.
         """
-        cmd = "kubectl --kubeconfig={0} get node {1} -o=jsonpath={{.metadata.labels}}"
-        cmd = cmd.format(self.kubeconfig_path, self.charm.get_node_name())
+        cmd = self._kubectl("get node {0} -o=jsonpath={{.metadata.labels}}")
+        cmd = cmd.format(self.charm.get_node_name())
         retry_msg = "Failed to get labels. Will retry."
         try:
             label_json, _ = LabelMaker._retried_call(cmd.split(), retry_msg)
@@ -82,8 +101,8 @@ class LabelMaker(Object):
         @param str value: Value to associate with the label
         @raises LabelMaker.NodeLabelError: if the label cannot be added
         """
-        cmd = "kubectl --kubeconfig={0} label node {1} {2}={3} --overwrite"
-        cmd = cmd.format(self.kubeconfig_path, self.charm.get_node_name(), label, value)
+        cmd = self._kubectl("label node {0} {1}={2} --overwrite")
+        cmd = cmd.format(self.charm.get_node_name(), label, value)
         retry_msg = "Failed to apply label {0}={1}. Will retry.".format(label, value)
         LabelMaker._retried_call(cmd.split(), retry_msg)
 
@@ -94,8 +113,8 @@ class LabelMaker(Object):
         @param str label: Label name to remove
         @raises LabelMaker.NodeLabelError: if the label cannot be removed
         """
-        cmd = "kubectl --kubeconfig={0} label node {1} {2}-"
-        cmd = cmd.format(self.kubeconfig_path, self.charm.get_node_name(), label)
+        cmd = self._kubectl("label node {0} {1}-")
+        cmd = cmd.format(self.charm.get_node_name(), label)
         retry_msg = "Failed to remove label {0}. Will retry.".format(label)
         LabelMaker._retried_call(cmd.split(), retry_msg)
 
