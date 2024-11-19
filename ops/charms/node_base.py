@@ -2,26 +2,33 @@
 
 import json
 import logging
-import time
+import ops
+from subprocess import run
 from os import PathLike
 from pathlib import Path
-from subprocess import run
+
+import time
 from typing import Union, List, Mapping, Optional, Protocol, Tuple
 
-from ops import Model, Object, CharmMeta, StoredState
+try:
+    from typing import Annotated, TypeAlias
+
+    PositiveInt: TypeAlias = Annotated[int, lambda x: x > 0]
+except ImportError:
+    # if Annotated is not available, just use int
+    PositiveInt = int
 
 log = logging.getLogger(__name__)
 RUN_RETRIES = 180
 
 
-class Charm(Protocol):
+class CharmImpl(Protocol):
     def get_node_name(self) -> str: ...  # pragma: no cover
 
     def get_cloud_name(self) -> str: ...  # pragma: no cover
 
-    model: Model
-
-    meta: CharmMeta
+    model: ops.Model
+    meta: ops.CharmMeta
 
 
 def _is_kubectl(p: PathLike) -> bool:
@@ -29,10 +36,10 @@ def _is_kubectl(p: PathLike) -> bool:
     return Path(p).exists()
 
 
-class LabelMaker(Object):
+class LabelMaker(ops.Object):
     """Use to apply labels to a kubernetes node."""
 
-    _stored = StoredState()
+    _stored = ops.StoredState()
 
     class NodeLabelError(Exception):
         """Raised when there's an error labeling a node."""
@@ -41,21 +48,34 @@ class LabelMaker(Object):
 
     def __init__(
         self,
-        charm: Charm,
+        charm: CharmImpl,
         kubeconfig_path: Union[PathLike, str],
+        *,
         kubectl: Optional[PathLike] = "/snap/bin/kubectl",
-    ):
+        user_label_key: str = "labels",
+        timeout: Optional[PositiveInt] = None,
+    ) -> None:
+        """Initialize the LabelMaker.
+
+        @param charm: The charm instance
+        @param kubeconfig_path: Path to the kubeconfig file
+        @param kubectl: Path to the kubectl binary
+        @param user_label_key: The key in the charm config where the user labels are stored
+        @param timeout: Number of seconds to retry a command
+        """
+
         super().__init__(parent=charm, key="NodeBase")
         self.charm = charm
         self.kubeconfig_path = kubeconfig_path
         self.kubectl_path = kubectl
+        self.user_labels_key = user_label_key
+        self.run_retries = RUN_RETRIES if timeout is None else timeout
         self._stored.set_default(current_labels=dict())
 
-    @staticmethod
     def _retried_call(
-        cmd: List[str], retry_msg: str, timeout: int = None
+        self, cmd: List[str], retry_msg: str, timeout: int = None
     ) -> Tuple[bytes, bytes]:
-        timeout = RUN_RETRIES if timeout is None else timeout
+        timeout = self.run_retries if timeout is None else timeout
         deadline = time.time() + timeout
         while time.time() < deadline:
             rc = run(cmd, capture_output=True)
@@ -84,7 +104,7 @@ class LabelMaker(Object):
         cmd = cmd.format(self.charm.get_node_name())
         retry_msg = "Failed to get labels. Will retry."
         try:
-            label_json, _ = LabelMaker._retried_call(cmd.split(), retry_msg)
+            label_json, _ = self._retried_call(cmd.split(), retry_msg)
         except LabelMaker.NodeLabelError:
             return None
         try:
@@ -104,7 +124,7 @@ class LabelMaker(Object):
         cmd = self._kubectl("label node {0} {1}={2} --overwrite")
         cmd = cmd.format(self.charm.get_node_name(), label, value)
         retry_msg = "Failed to apply label {0}={1}. Will retry.".format(label, value)
-        LabelMaker._retried_call(cmd.split(), retry_msg)
+        self._retried_call(cmd.split(), retry_msg)
 
     def remove_label(self, label: str) -> None:
         """
@@ -116,7 +136,23 @@ class LabelMaker(Object):
         cmd = self._kubectl("label node {0} {1}-")
         cmd = cmd.format(self.charm.get_node_name(), label)
         retry_msg = "Failed to remove label {0}. Will retry.".format(label)
-        LabelMaker._retried_call(cmd.split(), retry_msg)
+        self._retried_call(cmd.split(), retry_msg)
+
+    def user_labels(self) -> Mapping[str, str]:
+        """
+        Returns the labels configured by the user.
+
+        @return Mapping[str, str]: User configured labels
+        """
+        user_labels, data = {}, self.charm.model.config[self.user_labels_key]
+        for item in data.split(" "):
+            try:
+                key, val = item.split("=")
+            except ValueError:
+                log.info(f"Skipping malformed option: {item}.")
+            else:
+                user_labels[key] = val
+        return user_labels
 
     def apply_node_labels(self) -> None:
         """
@@ -126,15 +162,7 @@ class LabelMaker(Object):
         @raises LabelMaker.NodeLabelError: if the label cannot be added or removed
         """
         # Get the user's configured labels.
-        config = self.charm.model.config
-        user_labels = {}
-        for item in config.get("labels").split(" "):
-            try:
-                key, val = item.split("=")
-            except ValueError:
-                log.info(f"Skipping malformed option: {item}.")
-            else:
-                user_labels[key] = val
+        user_labels = self.user_labels()
         # Collect the current label state.
         current_labels = self._stored.current_labels
 
