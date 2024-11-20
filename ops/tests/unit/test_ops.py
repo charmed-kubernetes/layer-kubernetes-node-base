@@ -18,7 +18,7 @@ class RunResponse:
 
 @pytest.fixture
 def fast_retry():
-    with mock.patch.object(node_base, "RUN_RETRIES", 2):
+    with mock.patch.object(node_base, "DEFAULT_TIMEOUT", 2):
         yield
 
 

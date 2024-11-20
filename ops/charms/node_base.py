@@ -2,6 +2,7 @@
 
 import json
 import logging
+import shlex
 import ops
 from subprocess import run
 from os import PathLike
@@ -19,10 +20,10 @@ except ImportError:
     PositiveInt = int
 
 log = logging.getLogger(__name__)
-RUN_RETRIES = 180
+DEFAULT_TIMEOUT = 180
 
 
-class CharmImpl(Protocol):
+class Charm(Protocol):
     def get_node_name(self) -> str: ...  # pragma: no cover
 
     def get_cloud_name(self) -> str: ...  # pragma: no cover
@@ -48,7 +49,7 @@ class LabelMaker(ops.Object):
 
     def __init__(
         self,
-        charm: CharmImpl,
+        charm: Charm,
         kubeconfig_path: Union[PathLike, str],
         *,
         kubectl: Optional[PathLike] = "/snap/bin/kubectl",
@@ -69,13 +70,14 @@ class LabelMaker(ops.Object):
         self.kubeconfig_path = kubeconfig_path
         self.kubectl_path = kubectl
         self.user_labels_key = user_label_key
-        self.run_retries = RUN_RETRIES if timeout is None else timeout
+        self.timeout = DEFAULT_TIMEOUT if timeout is None else timeout
         self._stored.set_default(current_labels=dict())
 
     def _retried_call(
-        self, cmd: List[str], retry_msg: str, timeout: int = None
+        self, cmd: List[str], retry_msg: str, timeout: Optional[int] = None
     ) -> Tuple[bytes, bytes]:
-        timeout = self.run_retries if timeout is None else timeout
+        if timeout is None:
+            timeout = self.timeout
         deadline = time.time() + timeout
         while time.time() < deadline:
             rc = run(cmd, capture_output=True)
@@ -104,7 +106,7 @@ class LabelMaker(ops.Object):
         cmd = cmd.format(self.charm.get_node_name())
         retry_msg = "Failed to get labels. Will retry."
         try:
-            label_json, _ = self._retried_call(cmd.split(), retry_msg)
+            label_json, _ = self._retried_call(shlex.split(cmd), retry_msg)
         except LabelMaker.NodeLabelError:
             return None
         try:
@@ -124,7 +126,7 @@ class LabelMaker(ops.Object):
         cmd = self._kubectl("label node {0} {1}={2} --overwrite")
         cmd = cmd.format(self.charm.get_node_name(), label, value)
         retry_msg = "Failed to apply label {0}={1}. Will retry.".format(label, value)
-        self._retried_call(cmd.split(), retry_msg)
+        self._retried_call(shlex.split(cmd), retry_msg)
 
     def remove_label(self, label: str) -> None:
         """
@@ -136,7 +138,7 @@ class LabelMaker(ops.Object):
         cmd = self._kubectl("label node {0} {1}-")
         cmd = cmd.format(self.charm.get_node_name(), label)
         retry_msg = "Failed to remove label {0}. Will retry.".format(label)
-        self._retried_call(cmd.split(), retry_msg)
+        self._retried_call(shlex.split(cmd), retry_msg)
 
     def user_labels(self) -> Mapping[str, str]:
         """
