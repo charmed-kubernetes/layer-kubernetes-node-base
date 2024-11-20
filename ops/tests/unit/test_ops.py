@@ -18,7 +18,7 @@ class RunResponse:
 
 @pytest.fixture
 def fast_retry():
-    with mock.patch.object(node_base, "RUN_RETRIES", 2):
+    with mock.patch.object(node_base, "DEFAULT_TIMEOUT", 2):
         yield
 
 
@@ -38,7 +38,7 @@ class TestCharm(ops.CharmBase):
     def get_cloud_name(self):
         return self.CLOUD
 
-    config_yaml = "options:\n  labels:\n    type: string\n    default: ''\n"
+    config_yaml = "options:\n  my-labels:\n    type: string\n    default: ''\n"
 
 
 @pytest.fixture
@@ -57,52 +57,50 @@ def is_kubectl():
         yield the_mock
 
 
-def test_active_labels_no_api(subprocess_run, harness):
-    lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
+@pytest.fixture
+def label_maker(harness) -> node_base.LabelMaker:
+    return node_base.LabelMaker(harness.charm, KUBE_CONFIG, user_label_key="my-labels")
+
+
+def test_active_labels_no_api(subprocess_run, label_maker):
     subprocess_run.return_value = RunResponse()
-    assert lm.active_labels() is None
+    assert label_maker.active_labels() is None
 
 
-def test_active_labels_invalid_kubectl(subprocess_run, harness, is_kubectl):
+def test_active_labels_invalid_kubectl(subprocess_run, label_maker, is_kubectl):
     is_kubectl.return_value = False
-    lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
     subprocess_run.return_value = RunResponse(1, b"", b"")
     with pytest.raises(node_base.LabelMaker.NodeLabelError):
-        assert lm.active_labels() is None
+        assert label_maker.active_labels() is None
 
 
-def test_active_labels_invalid_kubectl_response(subprocess_run, harness):
-    lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
+def test_active_labels_invalid_kubectl_response(subprocess_run, label_maker):
     subprocess_run.return_value = RunResponse(0, b"--")
-    assert lm.active_labels() is None
+    assert label_maker.active_labels() is None
 
 
-def test_active_labels_no_labels(subprocess_run, harness):
-    lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
+def test_active_labels_no_labels(subprocess_run, label_maker):
     subprocess_run.return_value = RunResponse(0, b"{}")
-    assert lm.active_labels() == {}
+    assert label_maker.active_labels() == {}
 
 
-def test_active_labels_single_label(subprocess_run, harness):
-    lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
+def test_active_labels_single_label(subprocess_run, label_maker):
     subprocess_run.return_value = RunResponse(
         0, b'{"node-role.kubernetes.io/control-plane": ""}'
     )
-    assert lm.active_labels() == {"node-role.kubernetes.io/control-plane": ""}
+    assert label_maker.active_labels() == {"node-role.kubernetes.io/control-plane": ""}
 
 
-def test_active_labels_apply_layer_failure(subprocess_run, harness):
+def test_active_labels_apply_layer_failure(subprocess_run, label_maker):
     subprocess_run.return_value = RunResponse(1)
-    lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
     with pytest.raises(node_base.LabelMaker.NodeLabelError):
-        lm.apply_node_labels()
+        label_maker.apply_node_labels()
 
 
-def test_active_labels_apply_layers_with_cloud(subprocess_run, harness):
+def test_active_labels_apply_layers_with_cloud(subprocess_run, label_maker):
     subprocess_run.return_value = RunResponse(0)
-    lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
     with mock.patch.object(TestCharm, "CLOUD", "aws"):
-        lm.apply_node_labels()
+        label_maker.apply_node_labels()
     subprocess_run.assert_has_calls(
         [
             mock.call(
@@ -125,14 +123,19 @@ def test_active_labels_apply_layers_with_cloud(subprocess_run, harness):
     )
 
 
-def test_active_labels_apply_layers_from_config(subprocess_run, harness, caplog):
-    harness.update_config({"labels": "node-role.kubernetes.io/control-plane= invalid"})
+def test_active_labels_apply_layers_from_config(
+    subprocess_run, harness, label_maker, caplog
+):
+    harness.update_config(
+        {"my-labels": "node-role.kubernetes.io/control-plane= invalid"}
+    )
     subprocess_run.return_value = RunResponse(0)
-    lm = node_base.LabelMaker(harness.charm, KUBE_CONFIG)
-    lm._stored.current_labels = {"node-role.kubernetes.io/worker": ""}
-    lm.apply_node_labels()
+    label_maker._stored.current_labels = {"node-role.kubernetes.io/worker": ""}
+    label_maker.apply_node_labels()
     assert "Skipping malformed option: invalid." in caplog.messages
-    assert lm._stored.current_labels == {"node-role.kubernetes.io/control-plane": ""}
+    assert label_maker._stored.current_labels == {
+        "node-role.kubernetes.io/control-plane": ""
+    }
     subprocess_run.assert_has_calls(
         [
             mock.call(
