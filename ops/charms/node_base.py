@@ -33,7 +33,14 @@ class Charm(Protocol):
 
 
 def _is_kubectl(p: PathLike) -> bool:
-    """Returns True when the provided path exists."""
+    """Returns True when the provided path exists.
+
+    Args:
+        p (PathLike): The path to check.
+
+    Returns:
+        bool: True if the path exists, False otherwise.
+    """
     return Path(p).exists()
 
 
@@ -58,13 +65,13 @@ class LabelMaker(ops.Object):
     ) -> None:
         """Initialize the LabelMaker.
 
-        @param charm: The charm instance
-        @param kubeconfig_path: Path to the kubeconfig file
-        @param kubectl: Path to the kubectl binary
-        @param user_label_key: The key in the charm config where the user labels are stored
-        @param timeout: Number of seconds to retry a command
+        Args:
+            charm (Charm): The charm instance.
+            kubeconfig_path (Union[PathLike, str]): Path to the kubeconfig file.
+            kubectl (Optional[PathLike], optional): Path to the kubectl binary. Defaults to "/snap/bin/kubectl".
+            user_label_key (str, optional): The key in the charm config where the user labels are stored. Defaults to "labels".
+            timeout (Optional[PositiveInt], optional): Number of seconds to retry a command. Defaults to None.
         """
-
         super().__init__(parent=charm, key="NodeBase")
         self.charm = charm
         self.kubeconfig_path = kubeconfig_path
@@ -76,6 +83,19 @@ class LabelMaker(ops.Object):
     def _retried_call(
         self, cmd: List[str], retry_msg: str, timeout: Optional[int] = None
     ) -> Tuple[bytes, bytes]:
+        """Run a command with retries.
+
+        Args:
+            cmd (List[str]): The command to run.
+            retry_msg (str): The message to log on retry.
+            timeout (Optional[int], optional): The timeout for retries. Defaults to None.
+
+        Returns:
+            Tuple[bytes, bytes]: The stdout and stderr of the command.
+
+        Raises:
+            LabelMaker.NodeLabelError: If the command fails after retries.
+        """
         if timeout is None:
             timeout = self.timeout
         deadline = time.time() + timeout
@@ -89,6 +109,14 @@ class LabelMaker(ops.Object):
             raise LabelMaker.NodeLabelError(retry_msg)
 
     def _kubectl(self, command: str) -> str:
+        """Construct a kubectl command.
+
+        Args:
+            command (str): The kubectl command to run.
+
+        Returns:
+            str: The full kubectl command.
+        """
         if not _is_kubectl(self.kubectl_path):
             retry_msg = "Failed to find kubectl. Will retry."
             stdout, _ = self._retried_call(["which", "kubectl"], retry_msg)
@@ -98,9 +126,11 @@ class LabelMaker(ops.Object):
         return base + " " + command
 
     def active_labels(self) -> Optional[Mapping[str, str]]:
-        """
-        Returns all existing labels if the api server can fetch from the node,
+        """Returns all existing labels if the api server can fetch from the node,
         otherwise returns None indicating the node cannot be relabeled.
+
+        Returns:
+            Optional[Mapping[str, str]]: The existing labels or None.
         """
         cmd = self._kubectl("get node {0} -o=jsonpath={{.metadata.labels}}")
         cmd = cmd.format(self.charm.get_node_name())
@@ -116,12 +146,14 @@ class LabelMaker(ops.Object):
             return None
 
     def set_label(self, label: str, value: str) -> None:
-        """
-        Add a label to this node.
+        """Add a label to this node.
 
-        @param str label: Label name to apply
-        @param str value: Value to associate with the label
-        @raises LabelMaker.NodeLabelError: if the label cannot be added
+        Args:
+            label (str): Label name to apply.
+            value (str): Value to associate with the label.
+
+        Raises:
+            LabelMaker.NodeLabelError: If the label cannot be added.
         """
         cmd = self._kubectl("label node {0} {1}={2} --overwrite")
         cmd = cmd.format(self.charm.get_node_name(), label, value)
@@ -129,11 +161,13 @@ class LabelMaker(ops.Object):
         self._retried_call(shlex.split(cmd), retry_msg)
 
     def remove_label(self, label: str) -> None:
-        """
-        Remove a label to this node.
+        """Remove a label from this node.
 
-        @param str label: Label name to remove
-        @raises LabelMaker.NodeLabelError: if the label cannot be removed
+        Args:
+            label (str): Label name to remove.
+
+        Raises:
+            LabelMaker.NodeLabelError: If the label cannot be removed.
         """
         cmd = self._kubectl("label node {0} {1}-")
         cmd = cmd.format(self.charm.get_node_name(), label)
@@ -141,10 +175,10 @@ class LabelMaker(ops.Object):
         self._retried_call(shlex.split(cmd), retry_msg)
 
     def user_labels(self) -> Mapping[str, str]:
-        """
-        Returns the labels configured by the user.
+        """Returns the labels configured by the user.
 
-        @return Mapping[str, str]: User configured labels
+        Returns:
+            Mapping[str, str]: User configured labels.
         """
         user_labels, data = {}, self.charm.model.config[self.user_labels_key]
         for item in data.split(" "):
@@ -157,11 +191,10 @@ class LabelMaker(ops.Object):
         return user_labels
 
     def apply_node_labels(self) -> None:
-        """
-        Parse the `labels` configuration option and apply the labels to the
-        node.
+        """Parse the `labels` configuration option and apply the labels to the node.
 
-        @raises LabelMaker.NodeLabelError: if the label cannot be added or removed
+        Raises:
+            LabelMaker.NodeLabelError: If the label cannot be added or removed.
         """
         # Get the user's configured labels.
         user_labels = self.user_labels()
