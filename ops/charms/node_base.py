@@ -62,6 +62,7 @@ class LabelMaker(ops.Object):
         kubectl: Optional[PathLike] = "/snap/bin/kubectl",
         user_label_key: str = "labels",
         timeout: Optional[PositiveInt] = None,
+        raise_invalid_label: bool = False,
     ) -> None:
         """Initialize the LabelMaker.
 
@@ -71,6 +72,7 @@ class LabelMaker(ops.Object):
             kubectl (Optional[PathLike], optional): Path to the kubectl binary. Defaults to "/snap/bin/kubectl".
             user_label_key (str, optional): The key in the charm config where the user labels are stored. Defaults to "labels".
             timeout (Optional[PositiveInt], optional): Number of seconds to retry a command. Defaults to None.
+            raise_invalid_label (bool, optional): Whether to raise an exception when an invalid label is found. Defaults to False.
         """
         super().__init__(parent=charm, key="NodeBase")
         self.charm = charm
@@ -79,6 +81,7 @@ class LabelMaker(ops.Object):
         self.user_labels_key = user_label_key
         self.timeout = DEFAULT_TIMEOUT if timeout is None else timeout
         self._stored.set_default(current_labels=dict())
+        self._raise_invalid_label = raise_invalid_label
 
     def _retried_call(
         self, cmd: List[str], retry_msg: str, timeout: Optional[int] = None
@@ -185,7 +188,9 @@ class LabelMaker(ops.Object):
             try:
                 key, val = item.split("=")
             except ValueError:
-                log.info(f"Skipping malformed option: {item}.")
+                if self._raise_invalid_label:
+                    raise self.NodeLabelError(f"Malformed label: {item}.")
+                log.error(f"Skipping Malformed label: {item}.")
             else:
                 user_labels[key] = val
         return user_labels
@@ -210,8 +215,12 @@ class LabelMaker(ops.Object):
 
             # Add any new labels.
             for key, val in user_labels.items():
-                self.set_label(key, val)
-                self._stored.current_labels[key] = val
+                if val.endswith("-"):
+                    # Remove the label if the value ends with a dash.
+                    self.remove_label(key)
+                else:
+                    self.set_label(key, val)
+                    self._stored.current_labels[key] = val
 
             # Set the juju-application and juju-charm labels.
             self.set_label("juju-application", self.charm.model.app.name)
