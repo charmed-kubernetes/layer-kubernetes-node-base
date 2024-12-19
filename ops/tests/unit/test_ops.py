@@ -127,14 +127,19 @@ def test_active_labels_apply_layers_from_config(
     subprocess_run, harness, label_maker, caplog
 ):
     harness.update_config(
-        {"my-labels": "node-role.kubernetes.io/control-plane= invalid"}
+        {
+            "my-labels": "node-role.kubernetes.io/control-plane= invalid extra-label.removable-"
+        }
     )
     subprocess_run.return_value = RunResponse(0)
-    label_maker._stored.current_labels = {"node-role.kubernetes.io/worker": ""}
+    label_maker._stored.current_labels = {
+        "node-role.kubernetes.io/worker": "",
+        "extra-label.removable": "",
+    }
     label_maker.apply_node_labels()
-    assert "Skipping malformed option: invalid." in caplog.messages
+    assert "Skipping Malformed label: invalid." in caplog.messages
     assert label_maker._stored.current_labels == {
-        "node-role.kubernetes.io/control-plane": ""
+        "node-role.kubernetes.io/control-plane": "",
     }
     subprocess_run.assert_has_calls(
         [
@@ -151,6 +156,7 @@ def test_active_labels_apply_layers_from_config(
             )
             for label_args in [
                 ("node-role.kubernetes.io/worker-",),
+                ("extra-label.removable-",),
                 ("node-role.kubernetes.io/control-plane=", "--overwrite"),
                 ("juju-application=test-charm", "--overwrite"),
                 ("juju-charm=test-charm", "--overwrite"),
@@ -158,3 +164,11 @@ def test_active_labels_apply_layers_from_config(
             ]
         ],
     )
+
+
+def test_raise_invalid_label(subprocess_run, harness, label_maker):
+    harness.update_config({"my-labels": "this=isn't=valid"})
+    subprocess_run.return_value = RunResponse(0)
+    label_maker._raise_invalid_label = True
+    with pytest.raises(node_base.LabelMaker.NodeLabelError):
+        label_maker.apply_node_labels()
