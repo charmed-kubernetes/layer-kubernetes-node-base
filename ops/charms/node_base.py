@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import shlex
 import ops
 from subprocess import run
@@ -21,6 +22,8 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 180
+TOPOLOGY_NODE_LABEL = "topology.kubernetes.io/zone"
+JUJU_AVAILABILITY_ZONE = "JUJU_AVAILABILITY_ZONE"
 
 
 class Charm(Protocol):
@@ -195,6 +198,20 @@ class LabelMaker(ops.Object):
                 user_labels[key] = val
         return user_labels
 
+    def get_label(self, key: str) -> Optional[str]:
+        """Get the value of a label.
+
+        Args:
+            key (str): The label to get.
+
+        Returns:
+            Optional[str]: The value of the label or None.
+        """
+        labels = self.active_labels()
+        if labels is None:
+            return None
+        return labels.get(key)
+
     def apply_node_labels(self) -> None:
         """Parse the `labels` configuration option and apply the labels to the node.
 
@@ -205,6 +222,10 @@ class LabelMaker(ops.Object):
         user_labels = self.user_labels()
         # Collect the current label state.
         current_labels = self._stored.current_labels
+
+        juju_az = os.getenv(JUJU_AVAILABILITY_ZONE)
+        if juju_az and not self.get_label(TOPOLOGY_NODE_LABEL):
+            self.set_label(TOPOLOGY_NODE_LABEL, juju_az)
 
         try:
             # Remove any labels that the user has removed from the config.

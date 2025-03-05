@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 import pytest
 import unittest.mock as mock
 
@@ -98,9 +99,19 @@ def test_active_labels_apply_layer_failure(subprocess_run, label_maker):
 
 
 def test_active_labels_apply_layers_with_cloud(subprocess_run, label_maker):
+    juju_az = "test-az-1"
+
+    def getenv_se(key: str) -> Optional[str]:
+        """os.getenv side effect."""
+        return juju_az if key == "JUJU_AVAILABILITY_ZONE" else ""
+
     subprocess_run.return_value = RunResponse(0)
+    # NOTE(Hue): using nested mocks since parenthesized context managers is not
+    # supported in Python 3.8
     with mock.patch.object(TestCharm, "CLOUD", "aws"):
-        label_maker.apply_node_labels()
+        with mock.patch("charms.node_base.os.getenv") as mock_getenv:
+            mock_getenv.side_effect = getenv_se
+            label_maker.apply_node_labels()
     subprocess_run.assert_has_calls(
         [
             mock.call(
@@ -115,6 +126,7 @@ def test_active_labels_apply_layers_with_cloud(subprocess_run, label_maker):
                 capture_output=True,
             )
             for label_args in [
+                (f"topology.kubernetes.io/zone={juju_az}", "--overwrite"),
                 ("juju-application=test-charm", "--overwrite"),
                 ("juju-charm=test-charm", "--overwrite"),
                 ("juju.io/cloud=ec2", "--overwrite"),
