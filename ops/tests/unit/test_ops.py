@@ -106,12 +106,12 @@ def test_active_labels_apply_layers_with_cloud(subprocess_run, label_maker):
         return juju_az if key == "JUJU_AVAILABILITY_ZONE" else ""
 
     subprocess_run.return_value = RunResponse(0)
-    with (
-        mock.patch.object(TestCharm, "CLOUD", "aws"),
-        mock.patch("charms.node_base.os.getenv") as mock_getenv,
-    ):
-        mock_getenv.side_effect = getenv_se
-        label_maker.apply_node_labels()
+    # NOTE(Hue): using nested mocks since parenthesized context managers is not
+    # supported in Python 3.8
+    with mock.patch.object(TestCharm, "CLOUD", "aws"):
+        with mock.patch("charms.node_base.os.getenv") as mock_getenv:
+            mock_getenv.side_effect = getenv_se
+            label_maker.apply_node_labels()
     subprocess_run.assert_has_calls(
         [
             mock.call(
