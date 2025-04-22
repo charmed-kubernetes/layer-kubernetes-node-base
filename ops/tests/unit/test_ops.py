@@ -63,6 +63,38 @@ def label_maker(harness) -> node_base.LabelMaker:
     return node_base.LabelMaker(harness.charm, KUBE_CONFIG, user_label_key="my-labels")
 
 
+@pytest.mark.parametrize(
+    "label, expected",
+    [
+        ("key-a=val-a", {"key-a": "val-a"}),
+        ("key-a=val-a key-b=val-b", {"key-a": "val-a", "key-b": "val-b"}),
+        ("  key-a=val-a key-b=val-b", {"key-a": "val-a", "key-b": "val-b"}),
+    ],
+)
+def test_user_labels(harness, label_maker, caplog, label, expected):
+    harness.update_config({"my-labels": label})
+    assert not label_maker._raise_invalid_label
+    assert label_maker.user_labels() == expected
+    assert caplog.messages == []
+
+
+def test_user_labels_invalid(harness, label_maker, caplog):
+    label = " key-a key-b"
+    harness.update_config({"my-labels": label})
+
+    label_maker._raise_invalid_label = True
+    with pytest.raises(node_base.LabelMaker.NodeLabelError):
+        label_maker.user_labels()
+    assert caplog.messages == []
+
+    label_maker._raise_invalid_label = False
+    assert label_maker.user_labels() == {}
+    assert caplog.messages == [
+        "Skipping Malformed label: key-a.",
+        "Skipping Malformed label: key-b.",
+    ]
+
+
 def test_active_labels_no_api(subprocess_run, label_maker):
     subprocess_run.return_value = RunResponse()
     assert label_maker.active_labels() is None

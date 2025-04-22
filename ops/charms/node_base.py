@@ -187,7 +187,7 @@ class LabelMaker(ops.Object):
             Mapping[str, str]: User configured labels.
         """
         user_labels, data = {}, self.charm.model.config[self.user_labels_key]
-        for item in data.split(" "):
+        for item in data.split():
             try:
                 key, val = item.split("=")
             except ValueError:
