@@ -1,3 +1,4 @@
+import ipaddress
 from dataclasses import dataclass
 from typing import Optional
 import pytest
@@ -216,3 +217,95 @@ def test_raise_invalid_label(subprocess_run, harness, label_maker):
     label_maker._raise_invalid_label = True
     with pytest.raises(node_base.LabelMaker.NodeLabelError):
         label_maker.apply_node_labels()
+
+
+@pytest.mark.parametrize("to_str", [False, True], ids=["objects", "strings"])
+@pytest.mark.parametrize(
+    "bind_addresses, unit_data, expected_all, expected_preferred",
+    [
+        (
+            [],
+            {"ingress-address": "1.2.3.4"},
+            ["1.2.3.4"],
+            ["1.2.3.4"],
+        ),
+        (
+            [],
+            {"private-address": "1.2.3.4"},
+            ["1.2.3.4"],
+            ["1.2.3.4"],
+        ),
+        (
+            ["1.2.3.4"],
+            {},
+            ["1.2.3.4"],
+            ["1.2.3.4"],
+        ),
+        (
+            ["250.0.0.1", "1.2.3.4"],
+            {},
+            ["1.2.3.4", "250.0.0.1"],  # sorted order
+            ["1.2.3.4"],
+        ),
+        (
+            [ipaddress.ip_address("250.0.0.1"), "1.2.3.4"],
+            {},
+            ["1.2.3.4", "250.0.0.1"],
+            ["1.2.3.4"],
+        ),
+        (
+            [ipaddress.ip_address("ffc0::1"), "1.2.3.4"],
+            {},
+            ["1.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
+            ["1.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
+        ),
+        (
+            [
+                ipaddress.ip_address("ffc0::2"),
+                ipaddress.ip_address("ffc0::1"),
+                "1.2.3.4",
+                "250.0.0.1",
+            ],
+            {},
+            [
+                "1.2.3.4",
+                "250.0.0.1",
+                "ffc0:0000:0000:0000:0000:0000:0000:0001",
+                "ffc0:0000:0000:0000:0000:0000:0000:0002",
+            ],
+            ["1.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
+        ),
+    ],
+    ids=[
+        "by-unit-data-ingress",
+        "by-unit-data-private",
+        "single-bind-address",
+        "multiple-bind-addresses",
+        "multiple-type",
+        "ipv6-ipv4-mixed",
+        "ipv6-mulit-ipv4-mixed",
+    ],
+)
+def test_node_address_by_relation(
+    bind_addresses, unit_data, expected_all, expected_preferred, to_str
+):
+    charm = mock.MagicMock()
+    charm.model.unit = "my-unit/0"
+    binding = charm.model.get_binding.return_value
+    binding.network.ingress_addresses = bind_addresses
+    relation = charm.model.get_relation.return_value
+    relation.data = {charm.model.unit: unit_data}
+
+    relation_name = "my-relation"
+    actual = node_base.NodeAddress.by_relation(charm, relation_name, to_str)
+    charm.model.get_binding.assert_called_once_with(relation_name)
+    if not to_str:
+        expected_all = [ipaddress.ip_address(fmt) for fmt in expected_all]
+    assert actual == expected_all
+
+    charm.model.get_binding.reset_mock()
+    actual = node_base.NodeAddress.by_relation_preferred(charm, relation_name, to_str)
+    charm.model.get_binding.assert_called_once_with(relation_name)
+    if not to_str:
+        expected_preferred = [ipaddress.ip_address(fmt) for fmt in expected_preferred]
+    assert actual == expected_preferred

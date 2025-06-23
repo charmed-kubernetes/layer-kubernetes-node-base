@@ -11,7 +11,7 @@ from os import PathLike
 from pathlib import Path
 
 import time
-from typing import Union, List, Mapping, Optional, Protocol, Tuple
+from typing import Union, Literal, List, Mapping, Optional, Protocol, Tuple, overload
 
 try:
     from typing import Annotated, TypeAlias
@@ -48,39 +48,52 @@ def _is_kubectl(p: PathLike) -> bool:
     return Path(p).exists()
 
 
-Address = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
-AddressList = List[Address]
+_Address = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+_AddressList = List[_Address]
+
+
+def _by_ver(addresses: _AddressList, version: int) -> _AddressList:
+    """Filter addresses by IP version.
+
+    Args:
+        addresses (AddressList): set of addresses to filter
+        version (int): The IP version to filter by (4 or 6).
+    """
+    return [ip for ip in addresses if ip.version == version]
+
+
+def _to_str(addresses: _AddressList) -> List[str]:
+    """Convert a list of IP addresses to their string representation.
+
+    Args:
+        addresses (AddressList): set of addresses to convert
+    """
+    return [ip.exploded for ip in addresses]
 
 
 class NodeAddress:
+    @overload
+    @staticmethod
+    def by_relation(
+        charm: ops.CharmBase, relation: str, to_str: Literal[False] = False
+    ) -> _AddressList: ...
+
+    @overload
+    @staticmethod
+    def by_relation(
+        charm: ops.CharmBase, relation: str, to_str: Literal[True]
+    ) -> List[str]: ...
 
     @staticmethod
-    def by_ver(addresses: AddressList, version: int) -> AddressList:
-        """Filter addresses by IP version.
-
-        Args:
-            addresses (List[IpAddrIPAddressess]): set of addresses to filter
-            version (int): The IP version to filter by (4 or 6).
-        """
-        return [ip for ip in addresses if ip.version == version]
-
-    @staticmethod
-    def as_str(addresses: AddressList) -> List[str]:
-        """Convert a list of IP addresses to their string representation.
-
-        Args:
-            addresses (AddressList): set of addresses to convert
-        """
-        return [ip.exploded for ip in addresses]
-
-    @staticmethod
-    def by_relation(charm: ops.CharmBase, relation: str) -> List[Address]:
+    def by_relation(
+        charm: ops.CharmBase, relation: str, to_str: bool = False
+    ) -> Union[_AddressList, List[str]]:
         """Get a sorted list of unique cluster ip addresses.
 
         This method retrieves the ingress addresses from the binding if available.
         If no binding is found, it falls back to the relation data.
         It filters out duplicate addresses and sorts them ordering
-        IPv4 addresses then IPV6 addresses.
+        IPv4 addresses then IPv6 addresses.
 
         Args:
             charm (ops.CharmBase): The charm instance.
@@ -96,22 +109,41 @@ class NodeAddress:
             )
             addresses = [address] if address else []
         uniq = {ipaddress.ip_address(addr) for addr in addresses}
-        return sorted(uniq, key=lambda x: (x.version, x))
+        sort = sorted(uniq, key=lambda x: (x.version, x))
+        return _to_str(sort) if to_str else sort
+
+    @overload
+    @staticmethod
+    def by_relation_preferred(
+        charm: ops.CharmBase, relation: str, to_str: Literal[False] = False
+    ) -> _AddressList: ...
+
+    @overload
+    @staticmethod
+    def by_relation_preferred(
+        charm: ops.CharmBase, relation: str, to_str: Literal[True]
+    ) -> List[str]: ...
 
     @staticmethod
-    def by_relation_preferred(charm: ops.CharmBase, relation: str) -> AddressList:
-        """Get a list of 2 addresses max, one per IP version.
+    def by_relation_preferred(
+        charm: ops.CharmBase, relation: str, to_str: bool = False
+    ) -> Union[_AddressList, List[str]]:
+        """Get a list of at most 2 addresses, one per IP version.
 
         This method retrieves the ingress addresses from the specified relation,
         filters them by IP version (IPv4 and IPv6), and returns a list of the
         first address of each version.
+
+        Args:
+            charm (ops.CharmBase): The charm instance.
+            relation (str): The relation name to get addresses from.
         """
-        addrs: List[Address] = []
+        addrs: _AddressList = []
         all_addrs = NodeAddress.by_relation(charm, relation)
         for ver in (4, 6):
-            if ver_addrs := NodeAddress.by_ver(all_addrs, ver):
+            if ver_addrs := _by_ver(all_addrs, ver):
                 addrs.append(ver_addrs[0])
-        return addrs
+        return _to_str(addrs) if to_str else addrs
 
 
 class LabelMaker(ops.Object):
