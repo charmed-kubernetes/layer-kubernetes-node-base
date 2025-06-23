@@ -1,5 +1,6 @@
 """Library shared between kubernetes control plane and kubernetes worker charms."""
 
+import ipaddress
 import json
 import logging
 import os
@@ -45,6 +46,72 @@ def _is_kubectl(p: PathLike) -> bool:
         bool: True if the path exists, False otherwise.
     """
     return Path(p).exists()
+
+
+Address = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+AddressList = List[Address]
+
+
+class NodeAddress:
+
+    @staticmethod
+    def by_ver(addresses: AddressList, version: int) -> AddressList:
+        """Filter addresses by IP version.
+
+        Args:
+            addresses (List[IpAddrIPAddressess]): set of addresses to filter
+            version (int): The IP version to filter by (4 or 6).
+        """
+        return [ip for ip in addresses if ip.version == version]
+
+    @staticmethod
+    def as_str(addresses: AddressList) -> List[str]:
+        """Convert a list of IP addresses to their string representation.
+
+        Args:
+            addresses (AddressList): set of addresses to convert
+        """
+        return [ip.exploded for ip in addresses]
+
+    @staticmethod
+    def by_relation(charm: ops.CharmBase, relation: str) -> List[Address]:
+        """Get a sorted list of unique cluster ip addresses.
+
+        This method retrieves the ingress addresses from the binding if available.
+        If no binding is found, it falls back to the relation data.
+        It filters out duplicate addresses and sorts them ordering
+        IPv4 addresses then IPV6 addresses.
+
+        Args:
+            charm (ops.CharmBase): The charm instance.
+            relation (str): The relation name to get addresses from.
+        """
+        addresses = []
+        if binding := charm.model.get_binding(relation):
+            addresses = binding.network.ingress_addresses
+        if not addresses and (rel := charm.model.get_relation(relation)):
+            unit_data = rel.data[charm.model.unit]
+            address = unit_data.get("ingress-address") or unit_data.get(
+                "private-address"
+            )
+            addresses = [address] if address else []
+        uniq = {ipaddress.ip_address(addr) for addr in addresses}
+        return sorted(uniq, key=lambda x: (x.version, x))
+
+    @staticmethod
+    def by_relation_preferred(charm: ops.CharmBase, relation: str) -> AddressList:
+        """Get a list of 2 addresses max, one per IP version.
+
+        This method retrieves the ingress addresses from the specified relation,
+        filters them by IP version (IPv4 and IPv6), and returns a list of the
+        first address of each version.
+        """
+        addrs: List[Address] = []
+        all_addrs = NodeAddress.by_relation(charm, relation)
+        for ver in (4, 6):
+            if ver_addrs := NodeAddress.by_ver(all_addrs, ver):
+                addrs.append(ver_addrs[0])
+        return addrs
 
 
 class LabelMaker(ops.Object):
