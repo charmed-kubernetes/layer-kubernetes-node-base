@@ -5,6 +5,7 @@ import pytest
 import unittest.mock as mock
 
 from charms import node_base
+import charms.node_base.address as node_address
 import ops
 import ops.testing
 
@@ -20,13 +21,13 @@ class RunResponse:
 
 @pytest.fixture
 def fast_retry():
-    with mock.patch.object(node_base, "DEFAULT_TIMEOUT", 2):
+    with mock.patch.object(node_base.labels, "DEFAULT_TIMEOUT", 2):
         yield
 
 
 @pytest.fixture
 def subprocess_run(fast_retry):
-    with mock.patch("charms.node_base.run") as mock_run:
+    with mock.patch("charms.node_base.labels.run") as mock_run:
         yield mock_run
 
 
@@ -55,7 +56,9 @@ def harness():
 
 @pytest.fixture(autouse=True)
 def is_kubectl():
-    with mock.patch.object(node_base, "_is_kubectl", return_value=True) as the_mock:
+    with mock.patch.object(
+        node_base.labels, "_is_kubectl", return_value=True
+    ) as the_mock:
         yield the_mock
 
 
@@ -142,7 +145,7 @@ def test_active_labels_apply_layers_with_cloud(subprocess_run, label_maker):
     # NOTE(Hue): using nested mocks since parenthesized context managers is not
     # supported in Python 3.8
     with mock.patch.object(TestCharm, "CLOUD", "aws"):
-        with mock.patch("charms.node_base.os.getenv") as mock_getenv:
+        with mock.patch("charms.node_base.labels.os.getenv") as mock_getenv:
             mock_getenv.side_effect = getenv_se
             label_maker.apply_node_labels()
     subprocess_run.assert_has_calls(
@@ -301,14 +304,14 @@ def test_node_address_by_relation(
     relation.data = {charm.model.unit: unit_data}
 
     relation_name = "my-relation"
-    actual = node_base.NodeAddress.by_relation(charm, relation_name, to_str)
+    actual = node_address.by_relation(charm, relation_name, to_str)
     charm.model.get_binding.assert_called_once_with(relation_name)
     if not to_str:
         expected_all = [ipaddress.ip_address(fmt) for fmt in expected_all]
     assert actual == expected_all
 
     charm.model.get_binding.reset_mock()
-    actual = node_base.NodeAddress.by_relation_preferred(charm, relation_name, to_str)
+    actual = node_address.by_relation_preferred(charm, relation_name, to_str)
     charm.model.get_binding.assert_called_once_with(relation_name)
     if not to_str:
         expected_preferred = [ipaddress.ip_address(fmt) for fmt in expected_preferred]
