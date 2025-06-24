@@ -132,9 +132,10 @@ class NodeAddress:
         egress_subnets = [ipaddress.ip_network(addr) for addr in egress_subnets]
         uniq = {ipaddress.ip_address(addr) for addr in addresses}
 
-        # the sort key is a tuple of
-        # * IP version  (4 or 6),
-        # * index of matching subnet in egress_subnets, IP address)
+        # the sort key is
+        #   IP version  (4 or 6),
+        #   index of matching subnet in egress_subnets
+        #   the IP address numerically ordered
         sort = sorted(
             uniq, key=lambda x: (x.version, _by_subnet_index(x, egress_subnets), x)
         )
