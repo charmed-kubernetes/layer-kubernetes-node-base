@@ -1,9 +1,11 @@
+import ipaddress
 from dataclasses import dataclass
 from typing import Optional
 import pytest
 import unittest.mock as mock
 
 from charms import node_base
+import charms.node_base.address as node_address
 import ops
 import ops.testing
 
@@ -19,13 +21,13 @@ class RunResponse:
 
 @pytest.fixture
 def fast_retry():
-    with mock.patch.object(node_base, "DEFAULT_TIMEOUT", 2):
+    with mock.patch.object(node_base.labels, "DEFAULT_TIMEOUT", 2):
         yield
 
 
 @pytest.fixture
 def subprocess_run(fast_retry):
-    with mock.patch("charms.node_base.run") as mock_run:
+    with mock.patch("charms.node_base.labels.run") as mock_run:
         yield mock_run
 
 
@@ -54,7 +56,9 @@ def harness():
 
 @pytest.fixture(autouse=True)
 def is_kubectl():
-    with mock.patch.object(node_base, "_is_kubectl", return_value=True) as the_mock:
+    with mock.patch.object(
+        node_base.labels, "_is_kubectl", return_value=True
+    ) as the_mock:
         yield the_mock
 
 
@@ -141,7 +145,7 @@ def test_active_labels_apply_layers_with_cloud(subprocess_run, label_maker):
     # NOTE(Hue): using nested mocks since parenthesized context managers is not
     # supported in Python 3.8
     with mock.patch.object(TestCharm, "CLOUD", "aws"):
-        with mock.patch("charms.node_base.os.getenv") as mock_getenv:
+        with mock.patch("charms.node_base.labels.os.getenv") as mock_getenv:
             mock_getenv.side_effect = getenv_se
             label_maker.apply_node_labels()
     subprocess_run.assert_has_calls(
@@ -216,3 +220,99 @@ def test_raise_invalid_label(subprocess_run, harness, label_maker):
     label_maker._raise_invalid_label = True
     with pytest.raises(node_base.LabelMaker.NodeLabelError):
         label_maker.apply_node_labels()
+
+
+@pytest.mark.parametrize("to_str", [False, True], ids=["objects", "strings"])
+@pytest.mark.parametrize(
+    "bind_addresses, unit_data, expected_all, expected_preferred",
+    [
+        (
+            [],
+            {"ingress-address": "10.2.3.4", "egress-subnets": "10.0.0.0/8"},
+            ["10.2.3.4"],
+            ["10.2.3.4"],
+        ),  # by unit data ingress-address and egress-subnets
+        (
+            [],
+            {"private-address": "10.2.3.4", "egress-subnets": "10.0.0.0/8"},
+            ["10.2.3.4"],
+            ["10.2.3.4"],
+        ),  # by unit data private-address and egress-subnets
+        (
+            ["10.2.3.4"],
+            {},
+            ["10.2.3.4"],
+            ["10.2.3.4"],
+        ),  # single bind address matching the egress-subnets
+        (
+            [
+                ipaddress.ip_address("250.0.0.1"),
+                "10.2.3.4",
+            ],
+            {},
+            ["10.2.3.4", "250.0.0.1"],  # sorted order
+            ["10.2.3.4"],
+        ),  # multiple bind addresses, one matching the egress-subnets
+        (
+            ["250.0.0.1", "10.2.3.4", "1.0.0.1"],
+            {},
+            ["10.2.3.4", "1.0.0.1", "250.0.0.1"],
+            ["10.2.3.4"],
+        ),  # multiple bind addresses, one matching the egress-subnets
+        (
+            [ipaddress.ip_address("ffc0::1"), "10.2.3.4"],
+            {},
+            ["10.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
+            ["10.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
+        ),
+        (
+            [
+                ipaddress.ip_address("ffc0::2"),
+                ipaddress.ip_address("ffc0::1"),
+                "10.2.3.4",
+                "250.0.0.1",
+            ],
+            {},
+            [
+                "10.2.3.4",
+                "250.0.0.1",
+                "ffc0:0000:0000:0000:0000:0000:0000:0001",
+                "ffc0:0000:0000:0000:0000:0000:0000:0002",
+            ],
+            ["10.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
+        ),
+    ],
+    ids=[
+        "by-unit-data-ingress",
+        "by-unit-data-private",
+        "single-bind-address",
+        "multiple-bind-addresses",
+        "multiple-bind-sorted-by-egress-subnet-then-numerically",
+        "ipv6-ipv4-mixed",
+        "ipv6-mulit-ipv4-mixed",
+    ],
+)
+def test_node_address_by_relation(
+    bind_addresses, unit_data, expected_all, expected_preferred, to_str
+):
+    charm = mock.MagicMock()
+    charm.model.unit = "my-unit/0"
+    binding = charm.model.get_binding.return_value
+    binding.network.ingress_addresses = bind_addresses
+    binding.network.egress_subnets = ["10.0.0.0/8"]
+    relation = charm.model.get_relation.return_value
+    relation.data = {charm.model.unit: unit_data}
+
+    relation_name = "my-relation"
+    actual = node_address.by_relation(charm, relation_name, to_str)
+    charm.model.get_binding.assert_called_once_with(relation_name)
+    if not to_str:
+        expected_all = [ipaddress.ip_address(fmt) for fmt in expected_all]
+    assert actual == expected_all
+
+    charm.model.get_binding.reset_mock()
+    actual = node_address.by_relation_preferred(charm, relation_name, to_str)
+    charm.model.get_binding.assert_called_once_with(relation_name)
+    if not to_str:
+        expected_preferred = [ipaddress.ip_address(fmt) for fmt in expected_preferred]
+    assert actual == expected_preferred
