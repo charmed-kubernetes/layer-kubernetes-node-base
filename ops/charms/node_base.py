@@ -49,6 +49,7 @@ def _is_kubectl(p: PathLike) -> bool:
 
 
 _Address = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+_Networks = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
 _AddressList = List[_Address]
 
 
@@ -69,6 +70,23 @@ def _to_str(addresses: _AddressList) -> List[str]:
         addresses (AddressList): set of addresses to convert
     """
     return [ip.exploded for ip in addresses]
+
+
+def _by_subnet_index(ip: _Address, subnets: List[_Networks]) -> int:
+    """Return the index of the subnet that most narrowly contains the IP address.
+
+    Args:
+        ip (Address): The IP address to check.
+        subnets (List[ipaddress._BaseNetwork]): The list of subnets to check against.
+
+    Returns:
+        int: The index of the subnet that contains the IP address, or len(subnets) if not found.
+    """
+    matches = [net for net in subnets if net.version == ip.version and ip in net]
+    if matches:
+        # Finds the most specific subnet (longest prefix match)
+        return subnets.index(max(matches, key=lambda net: net.prefixlen))
+    return len(subnets)
 
 
 class NodeAddress:
@@ -99,17 +117,27 @@ class NodeAddress:
             charm (ops.CharmBase): The charm instance.
             relation (str): The relation name to get addresses from.
         """
-        addresses = []
+        addresses, egress_subnets = [], []
         if binding := charm.model.get_binding(relation):
             addresses = binding.network.ingress_addresses
+            egress_subnets = binding.network.egress_subnets
         if not addresses and (rel := charm.model.get_relation(relation)):
             unit_data = rel.data[charm.model.unit]
+            egress_subnet = unit_data.get("egress-subnets")
             address = unit_data.get("ingress-address") or unit_data.get(
                 "private-address"
             )
             addresses = [address] if address else []
+            egress_subnets = [egress_subnet] if egress_subnet else []
+        egress_subnets = [ipaddress.ip_network(addr) for addr in egress_subnets]
         uniq = {ipaddress.ip_address(addr) for addr in addresses}
-        sort = sorted(uniq, key=lambda x: (x.version, x))
+
+        # the sort key is a tuple of
+        # * IP version  (4 or 6),
+        # * index of matching subnet in egress_subnets, IP address)
+        sort = sorted(
+            uniq, key=lambda x: (x.version, _by_subnet_index(x, egress_subnets), x)
+        )
         return _to_str(sort) if to_str else sort
 
     @overload

@@ -225,55 +225,58 @@ def test_raise_invalid_label(subprocess_run, harness, label_maker):
     [
         (
             [],
-            {"ingress-address": "1.2.3.4"},
-            ["1.2.3.4"],
-            ["1.2.3.4"],
-        ),
+            {"ingress-address": "10.2.3.4", "egress-subnets": "10.0.0.0/8"},
+            ["10.2.3.4"],
+            ["10.2.3.4"],
+        ),  # by unit data ingress-address and egress-subnets
         (
             [],
-            {"private-address": "1.2.3.4"},
-            ["1.2.3.4"],
-            ["1.2.3.4"],
-        ),
+            {"private-address": "10.2.3.4", "egress-subnets": "10.0.0.0/8"},
+            ["10.2.3.4"],
+            ["10.2.3.4"],
+        ),  # by unit data private-address and egress-subnets
         (
-            ["1.2.3.4"],
+            ["10.2.3.4"],
             {},
-            ["1.2.3.4"],
-            ["1.2.3.4"],
-        ),
+            ["10.2.3.4"],
+            ["10.2.3.4"],
+        ),  # single bind address matching the egress-subnets
         (
-            ["250.0.0.1", "1.2.3.4"],
+            [
+                ipaddress.ip_address("250.0.0.1"),
+                "10.2.3.4",
+            ],
             {},
-            ["1.2.3.4", "250.0.0.1"],  # sorted order
-            ["1.2.3.4"],
-        ),
+            ["10.2.3.4", "250.0.0.1"],  # sorted order
+            ["10.2.3.4"],
+        ),  # multiple bind addresses, one matching the egress-subnets
         (
-            [ipaddress.ip_address("250.0.0.1"), "1.2.3.4"],
+            ["250.0.0.1", "10.2.3.4", "1.0.0.1"],
             {},
-            ["1.2.3.4", "250.0.0.1"],
-            ["1.2.3.4"],
-        ),
+            ["10.2.3.4", "1.0.0.1", "250.0.0.1"],
+            ["10.2.3.4"],
+        ),  # multiple bind addresses, one matching the egress-subnets
         (
-            [ipaddress.ip_address("ffc0::1"), "1.2.3.4"],
+            [ipaddress.ip_address("ffc0::1"), "10.2.3.4"],
             {},
-            ["1.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
-            ["1.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
+            ["10.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
+            ["10.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
         ),
         (
             [
                 ipaddress.ip_address("ffc0::2"),
                 ipaddress.ip_address("ffc0::1"),
-                "1.2.3.4",
+                "10.2.3.4",
                 "250.0.0.1",
             ],
             {},
             [
-                "1.2.3.4",
+                "10.2.3.4",
                 "250.0.0.1",
                 "ffc0:0000:0000:0000:0000:0000:0000:0001",
                 "ffc0:0000:0000:0000:0000:0000:0000:0002",
             ],
-            ["1.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
+            ["10.2.3.4", "ffc0:0000:0000:0000:0000:0000:0000:0001"],
         ),
     ],
     ids=[
@@ -281,7 +284,7 @@ def test_raise_invalid_label(subprocess_run, harness, label_maker):
         "by-unit-data-private",
         "single-bind-address",
         "multiple-bind-addresses",
-        "multiple-type",
+        "multiple-bind-sorted-by-egress-subnet-then-numerically",
         "ipv6-ipv4-mixed",
         "ipv6-mulit-ipv4-mixed",
     ],
@@ -293,6 +296,7 @@ def test_node_address_by_relation(
     charm.model.unit = "my-unit/0"
     binding = charm.model.get_binding.return_value
     binding.network.ingress_addresses = bind_addresses
+    binding.network.egress_subnets = ["10.0.0.0/8"]
     relation = charm.model.get_relation.return_value
     relation.data = {charm.model.unit: unit_data}
 
