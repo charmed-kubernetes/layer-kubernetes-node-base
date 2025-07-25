@@ -292,12 +292,16 @@ def test_raise_invalid_label(subprocess_run, harness, label_maker):
         "ipv6-mulit-ipv4-mixed",
     ],
 )
+@mock.patch(
+    "charms.node_base.address.addr6_by_interface", new=mock.MagicMock(return_value=[])
+)
 def test_node_address_by_relation(
     bind_addresses, unit_data, expected_all, expected_preferred, to_str
 ):
     charm = mock.MagicMock()
     charm.model.unit = "my-unit/0"
     binding = charm.model.get_binding.return_value
+    binding.network.interfaces = [mock.MagicMock(name="eth0")]
     binding.network.ingress_addresses = bind_addresses
     binding.network.egress_subnets = ["10.0.0.0/8"]
     relation = charm.model.get_relation.return_value
@@ -316,3 +320,27 @@ def test_node_address_by_relation(
     if not to_str:
         expected_preferred = [ipaddress.ip_address(fmt) for fmt in expected_preferred]
     assert actual == expected_preferred
+
+
+ADDRV6_OUTPUT = """
+[{"ifindex":2,"ifname":"enp5s0","flags":["BROADCAST","MULTICAST","UP","LOWER_UP"],"mtu":1500,"qdisc":"mq","operstate":"UP","group":"default","txqlen":1000,"addr_info":[{"family":"inet6","local":"fd42:270:c358:cd3b:216:3eff:fe69:5bca","prefixlen":64,"scope":"global","mngtmpaddr":true,"noprefixroute":true,"valid_life_time":4294967295,"preferred_life_time":4294967295},{"family":"inet6","local":"fe80::216:3eff:fe69:5bca","prefixlen":64,"scope":"link","valid_life_time":4294967295,"preferred_life_time":4294967295}]}]
+""".strip()
+
+
+@mock.patch("subprocess.check_output", new=mock.MagicMock(return_value=ADDRV6_OUTPUT))
+def test_addr6_by_interface():
+    expected = [
+        ops.NetworkInterface(
+            "enp5s0",
+            {
+                "address": "fd42:270:c358:cd3b:216:3eff:fe69:5bca",
+                "value": "fd42:270:c358:cd3b:216:3eff:fe69:5bca",
+                "cidr": "fd42:270:c358:cd3b::/64",
+            },
+        ),
+    ]
+    actual = node_address.addr6_by_interface("enp5s0")
+    for each, expected_each in zip(actual, expected):
+        assert each.name == expected_each.name
+        assert each.address == expected_each.address
+        assert each.subnet == expected_each.subnet
