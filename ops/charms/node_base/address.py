@@ -1,14 +1,63 @@
 """Library shared between kubernetes control plane and kubernetes worker charms."""
 
+import logging
 import ipaddress
+import json
 import ops
 
 from typing import Union, List, Literal, overload
+import subprocess
+
+log = logging.getLogger(__name__)
 
 
 _Address = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 _Networks = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
 _AddressList = List[_Address]
+
+
+def addr6_by_interface(if_name: str) -> List[ops.NetworkInterface]:
+    """Return all IPv6 addresses on the given network interface using 'ip -6 -j'.
+
+    Args:
+        interface (str): The name of the network interface.
+
+    Returns:
+        list: List of IPv6 addresses on the interface.
+    """
+    result: List[ops.NetworkInterface] = []
+    try:
+        output = subprocess.check_output(
+            ["ip", "-6", "-j", "addr", "show", "dev", if_name], encoding="utf-8"
+        )
+    except subprocess.CalledProcessError as e:
+        log.warning(
+            "Failed to get IPv6 addresses for interface %s.", if_name, exc_info=e
+        )
+        return result
+
+    try:
+        data = json.loads(output)
+    except json.JSONDecodeError as e:
+        log.warning("Failed to decode IPv6 json for interface %s.", if_name, exc_info=e)
+        return result
+
+    addr_infos = [info for iface in data for info in iface.get("addr_info", [])]
+
+    for addr_info in addr_infos:
+        family: str = addr_info.get("family")
+        addr: str = addr_info.get("local")
+        prefixlen: int = addr_info.get("prefixlen")
+        if (
+            family == "inet6" and prefixlen and addr and not addr.startswith("fe80")
+        ):  # skip link-local
+            info = {
+                "address": addr,
+                "value": addr,
+                "cidr": str(ipaddress.ip_network(f"{addr}/{prefixlen}", strict=False)),
+            }
+            result.append(ops.NetworkInterface(if_name, info))
+    return result
 
 
 def _by_ver(addresses: _AddressList, version: int) -> _AddressList:
@@ -77,12 +126,18 @@ def by_relation(
     if binding := charm.model.get_binding(relation):
         addresses = binding.network.ingress_addresses
         egress_subnets = binding.network.egress_subnets
+        if ifc := next(iter(binding.network.interfaces), None):
+            nets = addr6_by_interface(ifc.name)
+            addresses.extend(net.address for net in nets if net.address)
+            egress_subnets.extend(net.subnet for net in nets if net.subnet)
+
     if not addresses and (rel := charm.model.get_relation(relation)):
         unit_data = rel.data[charm.model.unit]
         egress_subnet = unit_data.get("egress-subnets")
         address = unit_data.get("ingress-address") or unit_data.get("private-address")
         addresses = [address] if address else []
         egress_subnets = [egress_subnet] if egress_subnet else []
+
     egress_subnets = [ipaddress.ip_network(addr) for addr in egress_subnets]
     uniq = {ipaddress.ip_address(addr) for addr in addresses}
 
